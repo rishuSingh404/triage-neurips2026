@@ -151,9 +151,9 @@ TRIAGE uses three publicly available medical VQA datasets, loaded directly from 
 
 | Dataset | Domain | HuggingFace Handle | License |
 |---|---|---|---|
-| VQA-RAD | Radiology | `flaviagiammarino/vqa-rad` | Public domain |
-| SLAKE | Bilingual Medical | `BoKelvin/SLAKE` | CC BY 4.0 |
-| PathVQA | Histopathology | `flaviagiammarino/path-vqa` | MIT |
+| VQA-RAD | Radiology | `flaviagiammarino/vqa-rad` | [CC0 1.0 Universal](https://huggingface.co/datasets/flaviagiammarino/vqa-rad#licensing-information) |
+| SLAKE | Bilingual Medical | `BoKelvin/SLAKE` | No explicit license stated — available for research use (contact authors for commercial use) |
+| PathVQA | Histopathology | `flaviagiammarino/path-vqa` | [MIT License](https://github.com/UCSD-AI4H/PathVQA/blob/master/LICENSE) |
 
 Our contribution is the **P/K/R failure-type annotation layer** (TriageBench), which is applied on top of these datasets. A stratified 100-sample subset of TriageBench is included in `data/sample/`. The full annotation set (N=4,755) will be released under **CC BY 4.0** upon paper acceptance.
 
@@ -263,6 +263,6 @@ See `data/sample/annotation_schema.json` for the complete field-level schema and
 |---|---|
 | Code (this repository) | MIT License |
 | TriageBench annotations | CC BY 4.0 (upon acceptance) |
-| VQA-RAD images / QA | Public domain |
-| SLAKE images / QA | CC BY 4.0 |
-| PathVQA images / QA | MIT |
+| VQA-RAD images / QA | CC0 1.0 Universal (effectively public domain) |
+| SLAKE images / QA | No explicit license — available for research use |
+| PathVQA images / QA | MIT License |
