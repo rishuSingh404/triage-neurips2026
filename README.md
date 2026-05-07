@@ -42,6 +42,9 @@ PathVQA transfer: **+19.1 pp** over zero-shot (28.3% → 47.4%) with **no retrai
 
 ---
 
+---
+
+
 ## The One-Way Geometric Barrier
 
 ![One-way barrier and gradient conflict figure](assets/fig_one_way_barrier.png)
@@ -60,7 +63,7 @@ The **62 pp asymmetry** (p < 10⁻²⁶) and the gap between the failure centroi
 
 ## Failure Crystallisation in Latent Space
 
-> 📄 **[Download Figure — Failure Crystallisation (PDF, vector)](assets/fig_crystallisation.pdf)**
+![Failure crystallisation and attentional entropy](assets/fig_crystallisation.pdf)
 
 *Left: layer-wise probe AUROC showing that P, K, and R failure signatures crystallise at different depths (P plateaus at L14; R spikes at L23–L26). Right: attentional entropy distributions — P failures show distinctly lower, more focused entropy (~2.36 bits) compared to K (~2.61) and R (~2.67).*
 
@@ -82,10 +85,7 @@ This repository is a **peer-review sample**. The table below explains what is in
 
 | Component | Status in this repo |
 |---|---|
-| `assets/fig_performance_ladder.png` | ✅ Performance ladder + per-type correction rates |
-| `assets/fig_one_way_barrier.png` | ✅ One-Way Barrier + gradient conflict |
-| `assets/fig_pca_hidden_states.png` | ✅ PCA scatter of P/K/R prefill states |
-| `assets/fig_crystallisation.pdf` | ✅ Failure crystallisation (vector PDF) |
+| Result figures (4 total) | ✅ Included in `assets/` |
 | LoRA / routing hyperparameter config | ✅ Included in `configs/lora_config.yaml` |
 | Probe training skeleton + AUROC results | ✅ Included in `src/probes/train_probe.py` |
 | Pipeline architecture + alpha-map constants | ✅ Included in `src/routing/triage_pipeline.py` |
@@ -96,6 +96,41 @@ This repository is a **peer-review sample**. The table below explains what is in
 | Full training loop & inference code | 🔒 Released upon acceptance |
 | Pre-trained probe checkpoints | 🔒 Released upon acceptance |
 | Full TriageBench (N=4,755 annotations) | 🔒 Released upon acceptance |
+
+---
+
+## Repository Structure
+
+```
+triage_anon_repo/
+├── assets/                          ← Result figures (PNG/PDF)
+├── src/
+│   ├── probes/
+│   │   └── train_probe.py           ← Probe training skeleton
+│   ├── routing/
+│   │   └── triage_pipeline.py       ← Full inference pipeline
+│   └── experiments/
+│       ├── exp_centroid_patching.py ← One-Way Barrier experiment
+│       └── exp_unconditioned_lora.py← Monolithic Muddle baseline
+├── configs/
+│   └── lora_config.yaml             ← Hyperparameter config
+├── scripts/
+│   ├── reproduce_table1.sh          ← Performance Ladder
+│   ├── reproduce_table2.sh          ← One-Way Barrier
+│   └── reproduce_table3.sh          ← Per-Etiology Breakdown
+├── data/
+│   ├── README_data.md
+│   ├── sample/
+│   │   ├── triageBench_sample_100.jsonl
+│   │   └── annotation_schema.json
+│   └── splits/
+│       ├── train_ids.txt
+│       ├── val_ids.txt
+│       └── test_ids.txt
+└── checkpoints/
+    └── README_checkpoints.md        ← Checkpoint info
+```
+
 
 ---
 
