@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+.env
+
+# Data / outputs
+outputs/
+results/
+*.pt
+*.pkl
+*.safetensors
+*.bin
+
+# Secrets
+*.key
+*.token

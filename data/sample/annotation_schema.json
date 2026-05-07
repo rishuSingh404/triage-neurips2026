@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TriageBench Annotation Schema",
+  "description": "Schema for TRIAGE P/K/R failure-type annotation records.",
+  "type": "object",
+  "required": ["id", "dataset", "question", "ground_truth", "model_prediction",
+               "failure_type", "confidence", "annotator_votes", "clinical_rationale",
+               "boundary_ambiguous", "split"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique sample ID, prefixed by source dataset (e.g., vqarad_0042)"
+    },
+    "dataset": {
+      "type": "string",
+      "enum": ["VQA-RAD", "SLAKE", "PathVQA"],
+      "description": "Source dataset for the image-question pair"
+    },
+    "question": {
+      "type": "string",
+      "description": "Original medical VQA question"
+    },
+    "ground_truth": {
+      "type": "string",
+      "description": "Correct answer from dataset ground truth"
+    },
+    "model_prediction": {
+      "type": "string",
+      "description": "Incorrect prediction from Qwen2.5-VL-7B-Instruct (zero-shot greedy)"
+    },
+    "failure_type": {
+      "type": "string",
+      "enum": ["P", "K", "R"],
+      "description": "Tri-model consensus failure etiology label. P=Perception, K=Knowledge, R=Reasoning"
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"],
+      "description": "Annotation confidence. 'high' = all 3 models agree, 'medium' = 2/3 agree, 'low' = GPT-4o tiebreaker used"
+    },
+    "annotator_votes": {
+      "type": "object",
+      "description": "Vote counts from the 3-model consensus pipeline (Llama-3.2-90B, Gemini-2.5-Pro, GPT-4o)",
+      "properties": {
+        "P": {"type": "integer", "minimum": 0, "maximum": 3},
+        "K": {"type": "integer", "minimum": 0, "maximum": 3},
+        "R": {"type": "integer", "minimum": 0, "maximum": 3}
+      }
+    },
+    "clinical_rationale": {
+      "type": "string",
+      "description": "Free-text explanation of which decision gate failed (see annotation prompt in Supplementary A)"
+    },
+    "boundary_ambiguous": {
+      "type": "boolean",
+      "description": "True if the sample lies in the 12% K/R boundary-ambiguity region"
+    },
+    "split": {
+      "type": "string",
+      "enum": ["train", "val", "test"],
+      "description": "Dataset split assignment. Split indices are fixed in split_indices.json"
+    }
+  }
+}

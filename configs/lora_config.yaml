@@ -1,0 +1,38 @@
+lora:
+  r: 8
+  alpha: 16
+  dropout: 0.05
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+  bias: none
+
+training:
+  learning_rate: 2.0e-5
+  lr_scheduler: cosine
+  warmup_ratio: 0.05
+  batch_size: 16
+  epochs: 3
+  optimizer: AdamW
+  adam_beta1: 0.9
+  adam_beta2: 0.999
+  weight_decay: 0.01
+  max_grad_norm: 1.0
+  bf16: true
+  gradient_checkpointing: true
+
+quantization:
+  load_in_4bit: true
+  bnb_4bit_quant_type: nf4
+  bnb_4bit_use_double_quant: true
+  bnb_4bit_compute_dtype: bfloat16
+
+routing:
+  alpha_P: 0.65
+  alpha_R: 0.40
+  alpha_K: 0.00
+  apc_threshold: 0.05  # Adaptive Plausibility Constraint: mask tokens < 5% of top-1
+  probe_layer: 24
+  pca_components: 256
