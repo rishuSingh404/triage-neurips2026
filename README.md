@@ -42,14 +42,6 @@ PathVQA transfer: **+19.1 pp** over zero-shot (28.3% → 47.4%) with **no retrai
 
 ---
 
-## Cross-Architecture Generalization
-
-![Cross-architecture generalization results](assets/fig_cross_arch_results.png)
-
-The probe-guided routing generalizes zero-shot across model families without per-model expert retraining, demonstrating that the P/K/R failure manifolds are a universal property of medical VLMs — not an artifact of any single architecture or training regime.
-
----
-
 ## The One-Way Geometric Barrier
 
 ![One-way barrier and gradient conflict figure](assets/fig_one_way_barrier.png)
@@ -68,7 +60,7 @@ The **62 pp asymmetry** (p < 10⁻²⁶) and the gap between the failure centroi
 
 ## Failure Crystallisation in Latent Space
 
-![Failure crystallisation and attentional entropy](assets/fig_failure_crystallisation.png)
+> 📄 **[Download Figure — Failure Crystallisation (PDF, vector)](assets/fig_crystallisation.pdf)**
 
 *Left: layer-wise probe AUROC showing that P, K, and R failure signatures crystallise at different depths (P plateaus at L14; R spikes at L23–L26). Right: attentional entropy distributions — P failures show distinctly lower, more focused entropy (~2.36 bits) compared to K (~2.61) and R (~2.67).*
 
@@ -90,7 +82,10 @@ This repository is a **peer-review sample**. The table below explains what is in
 
 | Component | Status in this repo |
 |---|---|
-| Result figures (5 PNGs) | ✅ Included in `assets/` |
+| `assets/fig_performance_ladder.png` | ✅ Performance ladder + per-type correction rates |
+| `assets/fig_one_way_barrier.png` | ✅ One-Way Barrier + gradient conflict |
+| `assets/fig_pca_hidden_states.png` | ✅ PCA scatter of P/K/R prefill states |
+| `assets/fig_crystallisation.pdf` | ✅ Failure crystallisation (vector PDF) |
 | LoRA / routing hyperparameter config | ✅ Included in `configs/lora_config.yaml` |
 | Probe training skeleton + AUROC results | ✅ Included in `src/probes/train_probe.py` |
 | Pipeline architecture + alpha-map constants | ✅ Included in `src/routing/triage_pipeline.py` |
