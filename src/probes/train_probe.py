@@ -1,115 +1,86 @@
 #!/usr/bin/env python3
 """
-train_probe.py — TRIAGE Linear Probe Training
+train_probe.py — TRIAGE Linear Probe Training (Illustrative Sample)
 
 Trains binary LinearSVC probes on prefill hidden states to detect
-P/K/R failure etiologies before generation.
+P/K/R failure etiologies before generation begins.
 
-Usage:
-    python src/probes/train_probe.py \
-        --hidden_states path/to/hidden_states.pt \
-        --labels path/to/labels.json \
-        --output_dir outputs/probes/
+This file shows the training configuration and evaluation protocol.
+The complete data loading pipeline and training loop will be released
+upon paper acceptance.
 
-Architecture:
-    - LinearSVC (C=0.1, dual=True) trained on PCA-256 features
-    - Stratified 5-fold cross-validation
-    - Per-layer AUROC to identify the phase transition layer (peaks at L24-L26)
+Key design choices (from paper Section 3.2):
+  - Probe type:    LinearSVC (C=0.1, dual=True)
+  - Features:      PCA-256 projection of last-token prefill hidden state
+  - Validation:    Stratified 5-fold cross-validation
+  - Best layer:    L24–L26 (identified via the layer-wise AUROC sweep shown in Figure 2a)
+  - Null baseline: 100 independent label shuffles → AUROC 0.505 ± 0.02 (chance)
 """
-import argparse
-import json
-import os
-import torch
 import numpy as np
 from sklearn.svm import LinearSVC
 from sklearn.decomposition import PCA
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import roc_auc_score
 from sklearn.preprocessing import label_binarize
-from tqdm import tqdm
 
 
-def load_hidden_states(path: str) -> dict:
-    """Load extracted hidden states from disk.
+# ── Probe Configuration ───────────────────────────────────────────────────────
+PROBE_CONFIG = {
+    "classifier":   "LinearSVC",
+    "C":            0.1,
+    "dual":         True,
+    "max_iter":     2000,
+    "pca_dim":      256,
+    "cv_folds":     5,
+    "random_state": 42,
+}
 
-    Returns:
-        dict with keys: 'states' (tensor: N x L x D), 'labels' (list of str)
+# ── Reported AUROC Results (paper Table 2 / Figure 2a) ───────────────────────
+REPORTED_AUROCS = {
+    "P": {"best_layer": 24, "auroc": 0.787, "ci_95": [0.771, 0.802]},
+    "K": {"best_layer": 26, "auroc": 0.803, "ci_95": [0.787, 0.818]},
+    "R": {"best_layer": 24, "auroc": 0.857, "ci_95": [0.843, 0.870]},
+    "macro_avg": 0.816,
+}
+
+
+def build_probe(pca_dim: int = 256, C: float = 0.1):
     """
-    return torch.load(path, map_location="cpu")
+    Returns a (pca, clf) tuple ready for fitting.
 
-
-def compute_layer_aurocs(states: np.ndarray, labels: np.ndarray, n_layers: int) -> list:
+    Usage:
+        pca, clf = build_probe()
+        X_pca = pca.fit_transform(hidden_states)   # (N, pca_dim)
+        clf.fit(X_pca, labels)
+        probe = {"pca": pca, "clf": clf}
     """
-    For each layer, train a LinearSVC probe and compute macro-AUROC via 5-fold CV.
-
-    Returns list of AUROC values, one per layer.
-    """
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    pca = PCA(n_components=256, random_state=42)
-    layer_aurocs = []
-
-    for layer_idx in tqdm(range(n_layers), desc="Probing layers"):
-        X = states[:, layer_idx, :]          # (N, D)
-        X_pca = pca.fit_transform(X)
-
-        fold_aurocs = []
-        for train_idx, val_idx in skf.split(X_pca, labels):
-            X_tr, X_val = X_pca[train_idx], X_pca[val_idx]
-            y_tr, y_val = labels[train_idx], labels[val_idx]
-
-            clf = LinearSVC(C=0.1, dual=True, max_iter=2000)
-            clf.fit(X_tr, y_tr)
-
-            # Compute decision scores for one-vs-rest AUROC
-            scores = clf.decision_function(X_val)
-            classes = clf.classes_
-            y_bin = label_binarize(y_val, classes=classes)
-            try:
-                auroc = roc_auc_score(y_bin, scores, multi_class="ovr", average="macro")
-            except ValueError:
-                auroc = 0.5
-            fold_aurocs.append(auroc)
-
-        layer_aurocs.append(float(np.mean(fold_aurocs)))
-
-    return layer_aurocs
+    pca = PCA(n_components=pca_dim, random_state=42)
+    clf = LinearSVC(C=C, dual=True, max_iter=2000)
+    return pca, clf
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--hidden_states", required=True)
-    parser.add_argument("--labels", required=True)
-    parser.add_argument("--output_dir", default="outputs/probes")
-    args = parser.parse_args()
-
-    os.makedirs(args.output_dir, exist_ok=True)
-
-    print("[1/3] Loading hidden states...")
-    data = load_hidden_states(args.hidden_states)
-    states = data["states"].numpy()      # (N, L, D)
-    with open(args.labels) as f:
-        labels = np.array(json.load(f))  # ["P", "K", "R", ...]
-
-    n_layers = states.shape[1]
-    print(f"     N={len(states)} samples, L={n_layers} layers, D={states.shape[2]}")
-
-    print("[2/3] Running layer-wise probing...")
-    aurocs = compute_layer_aurocs(states, labels, n_layers)
-
-    best_layer = int(np.argmax(aurocs))
-    print(f"     Phase transition layer: L{best_layer} (AUROC={aurocs[best_layer]:.4f})")
-
-    print("[3/3] Saving results...")
-    results = {
-        "layer_aurocs": aurocs,
-        "best_layer": best_layer,
-        "best_auroc": aurocs[best_layer],
-    }
-    out_path = os.path.join(args.output_dir, "probe_aurocs.json")
-    with open(out_path, "w") as f:
-        json.dump(results, f, indent=2)
-    print(f"     Saved to {out_path}")
+# ──────────────────────────────────────────────────────────────────────────────
+#  NOTE: The following components are redacted pending paper acceptance.
+#  Full code will be released under the MIT License upon acceptance.
+#
+#  Redacted components:
+#    1. load_hidden_states()  — Loads pre-extracted .pt files from disk
+#    2. compute_layer_aurocs() — Full layer-wise CV sweep (L0–L28)
+#    3. save_probe()           — Serialises (pca, clf) to .pkl
+#    4. main()                 — CLI entrypoint with argparse
+# ──────────────────────────────────────────────────────────────────────────────
 
 
 if __name__ == "__main__":
-    main()
+    print("TRIAGE Linear Probe — Configuration")
+    print(f"  Classifier: {PROBE_CONFIG['classifier']}(C={PROBE_CONFIG['C']})")
+    print(f"  PCA dim:    {PROBE_CONFIG['pca_dim']}")
+    print(f"  CV folds:   {PROBE_CONFIG['cv_folds']}")
+    print()
+    print("  Reported AUROCs (from paper):")
+    for etype, v in REPORTED_AUROCS.items():
+        if isinstance(v, dict):
+            print(f"    {etype}: AUROC={v['auroc']} at L{v['best_layer']}  95%CI={v['ci_95']}")
+    print(f"    Macro avg: {REPORTED_AUROCS['macro_avg']}")
+    print()
+    print("  Full training pipeline will be released upon paper acceptance.")

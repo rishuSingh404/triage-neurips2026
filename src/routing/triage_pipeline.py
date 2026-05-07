@@ -1,117 +1,81 @@
 #!/usr/bin/env python3
 """
-triage_pipeline.py — Full TRIAGE Inference Pipeline
+triage_pipeline.py — TRIAGE Inference Pipeline (Illustrative Sample)
 
-Implements the etiology-driven contrastive decoding pipeline:
-  1. Extract prefill hidden state at the best probe layer (L24-L26).
-  2. Run LinearSVC probe → predict P, K, or R etiology.
-  3. Apply dynamic contrastive decoding alpha based on etiology:
-       P → α=0.65  (force visual grounding)
-       R → α=0.40  (gentle logic correction)
-       K → α=0.0   (bypass CD, protect factual recall)
-  4. Apply Adaptive Plausibility Constraints (APC) to prevent vocabulary collapse.
+This file provides a structural overview of the TRIAGE inference pipeline,
+including the etiology-driven contrastive decoding formulation and the
+Adaptive Plausibility Constraint (APC) mechanism.
 
-Usage:
-    python src/routing/triage_pipeline.py \
-        --model_id Qwen/Qwen2.5-VL-7B-Instruct \
-        --probe_path outputs/probes/probe_L24.pkl \
-        --dataset vqa-rad \
-        --split test \
-        --output results/triage_vqarad.json
+The complete implementation — including the hidden-state extraction hook,
+the full contrastive decoding LogitsProcessor, and the end-to-end
+evaluation loop — will be released upon paper acceptance.
+
+If you have questions about the methodology, please refer to:
+  - Section 3 (Method) and Section 4 (Experiments) of the paper.
+  - Supplementary A (Annotation Protocol) and Supplementary B (Hyperparameters).
 """
-import argparse
-import json
-import pickle
-import torch
-import numpy as np
-from transformers import (
-    Qwen2_5_VLForConditionalGeneration,
-    AutoProcessor,
-    LogitsProcessor,
-    LogitsProcessorList,
-)
 
+# ── Routing Alpha Map (from paper Section 3.3) ───────────────────────────────
+# These values are the etiology-specific contrastive decoding strengths.
+# P → 0.65: Strong visual grounding penalty (forces perceptual features)
+# R → 0.40: Gentle logic correction (avoids over-penalising factual tokens)
+# K → 0.00: Bypass CD entirely (protects factual recall from logit interference)
 
-# ── Contrastive Decoding Alpha Map ────────────────────────────────────────────
 ALPHA_MAP = {
-    "P": 0.65,   # Perception: high penalty to force visual grounding
-    "R": 0.40,   # Reasoning: gentle penalty to correct logic chain
-    "K": 0.00,   # Knowledge: bypass CD entirely to protect factual recall
+    "P": 0.65,
+    "R": 0.40,
+    "K": 0.00,
 }
 
+# ── APC Threshold (from paper Section 3.3) ────────────────────────────────────
+# Tokens with probability < 5% of the expert LoRA's top-1 token are masked.
+# This prevents vocabulary collapse during contrastive decoding.
+APC_THRESHOLD = 0.05
 
-class AdaptivePlausibilityConstraint(LogitsProcessor):
+# ── Probe Configuration ───────────────────────────────────────────────────────
+PROBE_LAYER    = 24          # Best AUROC layer (see Figure 2a in paper)
+PCA_COMPONENTS = 256         # Dimensionality after PCA reduction (98.7% variance retained)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  NOTE: The complete implementation of the following components is redacted
+#  pending paper acceptance. Full code will be released under the MIT License.
+#
+#  Redacted components:
+#    1. load_model_4bit()         — 4-bit NF4 model loading with bitsandbytes
+#    2. extract_prefill_state()   — Hook-based hidden-state extraction at PROBE_LAYER
+#    3. EtiologyContrastiveDecoder — LogitsProcessor applying ALPHA_MAP dynamically
+#    4. AdaptivePlausibilityConstraint — APC masking (threshold = APC_THRESHOLD)
+#    5. run_triage_inference()    — End-to-end evaluation loop
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def predict_etiology(probe: dict, hidden_state) -> str:
     """
-    Masks tokens with probability < 5% of the expert LoRA's top token.
-    Prevents vocabulary collapse during contrastive decoding.
+    Run the LinearSVC probe on the prefill hidden state to predict P, K, or R.
+
+    Args:
+        probe:        dict with keys 'pca' (fitted PCA) and 'clf' (fitted LinearSVC)
+        hidden_state: numpy array of shape (D,) — the prefill hidden state vector
+
+    Returns:
+        str: one of "P", "K", "R"
+
+    Note:
+        Probe training details are in src/probes/train_probe.py.
+        The probe is applied to the PCA-256 projection of the L24 prefill state.
     """
-    def __init__(self, lora_logits: torch.Tensor, threshold: float = 0.05):
-        self.mask = lora_logits < (threshold * lora_logits.max(dim=-1, keepdim=True).values)
-
-    def __call__(self, input_ids, scores):
-        scores = scores.masked_fill(self.mask, float("-inf"))
-        return scores
-
-
-class EtiologyContrastiveDecoder(LogitsProcessor):
-    """
-    Implements etiology-driven contrastive decoding:
-        logits_final = logits_base - α * logits_lora
-    where α is determined by the probe's failure-type prediction.
-    """
-    def __init__(self, lora_logits: torch.Tensor, alpha: float):
-        self.lora_logits = lora_logits
-        self.alpha = alpha
-
-    def __call__(self, input_ids, scores):
-        if self.alpha == 0.0:
-            return scores  # K-route: bypass CD entirely
-        return scores - self.alpha * self.lora_logits
-
-
-def predict_etiology(probe, hidden_state: np.ndarray) -> str:
-    """Run the LinearSVC probe on the prefill hidden state."""
-    pca = probe["pca"]
-    clf = probe["clf"]
-    h = pca.transform(hidden_state.reshape(1, -1))
-    return clf.predict(h)[0]
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model_id", default="Qwen/Qwen2.5-VL-7B-Instruct")
-    parser.add_argument("--probe_path", required=True)
-    parser.add_argument("--dataset", choices=["vqa-rad", "slake", "pathvqa"], required=True)
-    parser.add_argument("--split", default="test")
-    parser.add_argument("--output", default="results/triage_output.json")
-    parser.add_argument("--probe_layer", type=int, default=24)
-    args = parser.parse_args()
-
-    print(f"[1/4] Loading probe from {args.probe_path}...")
-    with open(args.probe_path, "rb") as f:
-        probe = pickle.load(f)
-
-    print(f"[2/4] Loading model {args.model_id} (4-bit NF4)...")
-    # NOTE: Full model loading code omitted for brevity.
-    # See src/utils/data_utils.py for the complete load_model_4bit() helper.
-    print("      [Model loading skipped in sample — see data_utils.py]")
-
-    print("[3/4] Running TRIAGE inference on test set...")
-    print("      [Inference loop omitted in sample — see scripts/reproduce_table1.sh]")
-    print(f"      Etiology alpha map: {ALPHA_MAP}")
-
-    print(f"[4/4] Results would be saved to {args.output}")
-    sample_output = {
-        "dataset": args.dataset,
-        "split": args.split,
-        "probe_layer": args.probe_layer,
-        "alpha_map": ALPHA_MAP,
-        "note": "This is a skeleton sample. Full inference code available upon acceptance.",
-    }
-    import os; os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
-    with open(args.output, "w") as f:
-        json.dump(sample_output, f, indent=2)
+    import numpy as np
+    h_pca = probe["pca"].transform(hidden_state.reshape(1, -1))
+    return probe["clf"].predict(h_pca)[0]
 
 
 if __name__ == "__main__":
-    main()
+    print("TRIAGE Pipeline — Illustrative Sample")
+    print(f"  Routing alpha map:  {ALPHA_MAP}")
+    print(f"  APC threshold:      {APC_THRESHOLD}")
+    print(f"  Probe layer:        L{PROBE_LAYER}")
+    print(f"  PCA components:     {PCA_COMPONENTS}")
+    print()
+    print("  Full implementation will be released upon paper acceptance.")
+    print("  See the paper (Sections 3–4) for the complete algorithmic description.")
